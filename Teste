@@ -1,0 +1,48 @@
+#include <msp430.h>
+
+#define LDR_PIN BIT1      // Pino analógico onde o LDR está conectado (ADC)
+#define SERVO_PIN BIT0    // Pino do servo
+
+void ADC_setup() {
+    ADC10CTL0 = ADC10SHT_2 + ADC10ON + ADC10IE; // Configuração do ADC
+    ADC10CTL1 = INCH_1; // Canal 1 para leitura do LDR
+    ADC10AE0 |= LDR_PIN; // Habilitar entrada analógica no pino do LDR
+}
+
+void servo_control(int angle) {
+    int duty_cycle = (angle * 1000 / 180) + 1000; // Cálculo do ciclo de trabalho (PWM)
+    TA0CCR1 = duty_cycle; // Definir o valor do ciclo de trabalho para controlar o servo
+}
+
+void main(void) {
+    WDTCTL = WDTPW | WDTHOLD; // Parar o watchdog timer
+
+    P1DIR |= SERVO_PIN; // Configurar o pino do servo como saída
+
+    // Configuração do timer para gerar sinal PWM para o servo
+    TA0CCR0 = 20000 - 1; // Período do PWM
+    TA0CCTL1 = OUTMOD_7; // Modo de saída PWM
+    TA0CCR1 = 1500; // Pulsos para a posição inicial do servo
+    TA0CTL = TASSEL_2 + MC_1; // Selecionar o clock e modo do timer
+
+    ADC_setup(); // Configurar o ADC para leitura do LDR
+
+    int previous_value = 0; // Armazenar a leitura anterior do sensor LDR
+
+    while(1) {
+        ADC10CTL0 |= ENC + ADC10SC; // Habilitar e iniciar conversão ADC
+        while (ADC10CTL1 & ADC10BUSY); // Aguardar a conversão ser concluída
+
+        int sensor_value = ADC10MEM; // Ler o valor do sensor LDR
+
+        if (sensor_value > previous_value) {
+            // Se a luminosidade aumentou, mova o servo para a direita (ou para onde a luminosidade aumentou)
+            servo_control(90); // Mover para a posição central (ou posição desejada)
+        } else if (sensor_value < previous_value) {
+            // Se a luminosidade diminuiu, mova o servo para a esquerda (ou para onde a luminosidade diminuiu)
+            servo_control(0); // Mover para a posição esquerda (ou posição desejada)
+        }
+
+        previous_value = sensor_value; // Atualizar o valor anterior do sensor LDR para a próxima comparação
+    }
+}
